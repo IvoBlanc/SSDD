@@ -15,4 +15,5 @@ void loop() {
   delay(interval);  // Esperar
 
   printf ("sssss");
+  delay(1);
 }
