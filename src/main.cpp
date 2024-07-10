@@ -90,7 +90,6 @@ void loop() {
   Serial.println();
   Serial.println("Cerrando conexión");
   //wee
-  perreeeeee
   
 }
 
