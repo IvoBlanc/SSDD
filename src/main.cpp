@@ -1,96 +1,77 @@
-#include <Arduino.h>
-
-/*
-     Ejemplo de conexión usando IP estática
-     por Evandro Luis Copercini
-     Dominio público - 2017
-*/
-
 #include <WiFi.h>
+#include <WebServer.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
 
-const char *ssid = "blanc";
-const char *password = "tiempocompartido";
-const char *host = "example.com";
-const char *url = "/index.html";
+const char* ssid = "Internet_Services_1418";
+const char* password = "meia242113";
 
-IPAddress local_IP(192, 168, 100, 100);  // IP estática dentro del rango correcto
+// Configuración de IP estática
+IPAddress local_IP(192, 168, 100, 100);
 IPAddress gateway(192, 168, 100, 1);
 IPAddress subnet(255, 255, 255, 0);
-IPAddress primaryDNS(8, 8, 8, 8);    //opcional
-IPAddress secondaryDNS(8, 8, 4, 4);  //opcional
+
+WebServer server(80);
+
+int lightPin = 2;  // Pin donde está conectada la luz (LED)
+
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP);
+
+String targetTime = "22:05";  // Variable para almacenar la hora establecida
+
+void handleRoot() {
+  server.send(200, "text/html", "<form action=\"/set-time\" method=\"POST\"><input type=\"time\" name=\"time\"><input type=\"submit\" value=\"Set Time\"></form>");
+}
+
+void handleSetTime() {
+  if (server.hasArg("time")) {
+    targetTime = server.arg("time");
+    server.send(200, "text/plain", "Time set to: " + targetTime);
+  } else {
+    server.send(400, "text/plain", "Time parameter missing");
+  }
+}
 
 void setup() {
   Serial.begin(115200);
+  pinMode(lightPin, OUTPUT);
+  digitalWrite(lightPin, LOW);
 
-  Serial.println("Configurando IP estática...");
-  if (!WiFi.config(local_IP, gateway, subnet, primaryDNS, secondaryDNS)) {
-    Serial.println("Error al configurar la IP estática");
-  } else {
-    Serial.println("Configuración de IP estática exitosa");
+  // Configuración de IP estática
+  if (!WiFi.config(local_IP, gateway, subnet)) {
+    Serial.println("STA Failed to configure");
   }
-
-  Serial.print("Conectando a ");
-  Serial.println(ssid);
 
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
   }
 
-  Serial.println("");
-  Serial.println("¡WiFi conectado!");
-  Serial.print("Dirección IP: ");
+  Serial.println("Connected to WiFi");
   Serial.println(WiFi.localIP());
-  Serial.print("Dirección MAC del ESP: ");
-  Serial.println(WiFi.macAddress());
-  Serial.print("Máscara de subred: ");
-  Serial.println(WiFi.subnetMask());
-  Serial.print("IP del gateway: ");
-  Serial.println(WiFi.gatewayIP());
-  Serial.print("DNS: ");
-  Serial.println(WiFi.dnsIP());
+
+  server.on("/", handleRoot);
+  server.on("/set-time", HTTP_POST, handleSetTime);
+
+  server.begin();
+
+  // Configurar NTPClient
+  timeClient.begin();
+  timeClient.setTimeOffset(-14400);  // Ajusta según tu zona horaria
 }
 
 void loop() {
-  delay(5000);
+  server.handleClient();
+  timeClient.update();
 
-  Serial.print("Conectando a ");
-  Serial.println(host);
+  String currentTime = timeClient.getFormattedTime().substring(0, 5);
 
-  // Usar la clase WiFiClient para crear conexiones TCP
-  WiFiClient client;
-  const int httpPort = 80;
-  if (!client.connect(host, httpPort)) {
-    Serial.println("Conexión fallida");
-    return;
+  if (targetTime != "" && currentTime == targetTime) {
+    digitalWrite(lightPin, HIGH);
+  } else {
+    digitalWrite(lightPin, LOW);
   }
-
-  Serial.print("Solicitando URL: ");
-  Serial.println(url);
-
-  // Esto enviará la solicitud al servidor
-  client.print(String("GET ") + url + " HTTP/1.1\r\n" + "Host: " + host + "\r\n" + "Connection: close\r\n\r\n");
-  unsigned long timeout = millis();
-  while (client.available() == 0) {
-    if (millis() - timeout > 5000) {
-      Serial.println(">>> Tiempo de espera del cliente !");
-      client.stop();
-      return;
-    }
-  }
-
-  // Leer todas las líneas de la respuesta del servidor y mostrarlas en el Serial Monitor
-  while (client.available()) {
-    String line = client.readStringUntil('\r');
-    Serial.print(line);
-  }
-
-  Serial.println();
-  Serial.println("Cerrando conexión");
-  //wee
-  
 }
-
-
